@@ -36,7 +36,6 @@
       overscroll-behavior: none;
     }
 
-    /* Scroll solo si el contenido lo necesita */
     body {
       overflow-y: auto;
     }
@@ -60,7 +59,7 @@
 
     /* ===== MAIN CONTENT ===== */
     #main-content {
-      padding-top: 100px; /* espacio para el header fijo */
+      padding-top: 100px;
       padding-bottom: 32px;
       max-width: 480px;
       margin: 0 auto;
@@ -444,6 +443,20 @@
       color: #fef3c7;
     }
 
+    /* ===== REPORTE CIERRE ===== */
+    #resultado-cierre {
+      display: none;
+    }
+
+    @keyframes reporte-in {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    #resultado-cierre .card {
+      animation: reporte-in 400ms ease forwards;
+    }
+
     /* ===== DIVIDER ===== */
     .section-gap { margin-top: 14px; }
   </style>
@@ -558,6 +571,9 @@
       </button>
     </div>
 
+    <!-- 6. CONTENEDOR REPORTE DE CIERRE (oculto hasta recibir respuesta) -->
+    <div id="resultado-cierre" class="section-gap"></div>
+
   </main>
 
   <!-- ==============================
@@ -594,19 +610,13 @@
     let isSending = false;
     let toastTimeout = null;
 
-    // Colores de acento por modo
-    const ACCENT = {
-      hechos: { input: '#d97706', card: '#d97706' },
-      ventas: { input: '#10b981', card: '#10b981' }
-    };
-
     // ─── RELOJ ───────────────────────────────────────────
-    const DIAS = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+    const DIAS  = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
     const MESES = ['enero','febrero','marzo','abril','mayo','junio',
                    'julio','agosto','septiembre','octubre','noviembre','diciembre'];
 
     function actualizarReloj() {
-      const ahora = new Date();
+      const ahora     = new Date();
       const diaNombre = DIAS[ahora.getDay()];
       const diaNro    = ahora.getDate();
       const mesNombre = MESES[ahora.getMonth()];
@@ -622,7 +632,6 @@
         `<span style="font-weight:600;color:#cbd5e1;">${fechaStr}</span>&nbsp;·&nbsp;<span style="color:#94a3b8;">${horaStr}</span>`;
     }
 
-    // Ejecutar de inmediato y luego cada 1 segundo
     actualizarReloj();
     setInterval(actualizarReloj, 1000);
 
@@ -630,7 +639,6 @@
     function actualizarUI() {
       const esHechos = (modo === 'hechos');
 
-      // Switch buttons
       const btnH = document.getElementById('btn-hechos');
       const btnV = document.getElementById('btn-ventas');
 
@@ -642,17 +650,15 @@
         btnV.className = 'mode-btn active-ventas';
       }
 
-      // Cards border-left
       ['card-nutella', 'card-arequipe'].forEach(id => {
         const el = document.getElementById(id);
         el.classList.remove('mode-hechos', 'mode-ventas');
         el.classList.add(esHechos ? 'mode-hechos' : 'mode-ventas');
       });
 
-      // Badges
-      const badgeClass  = esHechos ? 'badge-hechos' : 'badge-ventas';
-      const badgeAlt    = esHechos ? 'badge-ventas' : 'badge-hechos';
-      const badgeText   = esHechos ? 'HECHOS' : 'VENTAS';
+      const badgeClass = esHechos ? 'badge-hechos' : 'badge-ventas';
+      const badgeAlt   = esHechos ? 'badge-ventas' : 'badge-hechos';
+      const badgeText  = esHechos ? 'HECHOS' : 'VENTAS';
 
       ['badge-nutella', 'badge-arequipe'].forEach(id => {
         const el = document.getElementById(id);
@@ -661,11 +667,9 @@
         el.textContent = badgeText;
       });
 
-      // Input focus color (CSS var)
       const accentColor = esHechos ? '#d97706' : '#10b981';
       document.documentElement.style.setProperty('--accent-color', accentColor);
 
-      // Botón confirmar
       const btnC = document.getElementById('btn-confirmar');
       btnC.classList.remove('mode-hechos', 'mode-ventas');
       btnC.classList.add(esHechos ? 'mode-hechos' : 'mode-ventas');
@@ -732,7 +736,6 @@
     async function confirmarRegistro() {
       if (isSending) return;
 
-      // Validar al menos un valor > 0
       if (nutella === 0 && arequipe === 0) {
         mostrarToast('warning', '⚠️ Ingresa al menos un valor');
         return;
@@ -743,11 +746,11 @@
 
       if (modo === 'hechos') {
         payload = {
-          fuente:           'app',
-          nutella_hechos:   nutella,
-          arequipe_hechos:  arequipe,
-          fecha:            fecha,
-          hora:             hora
+          fuente:          'app',
+          nutella_hechos:  nutella,
+          arequipe_hechos: arequipe,
+          fecha:           fecha,
+          hora:            hora
         };
       } else {
         payload = {
@@ -770,7 +773,6 @@
 
         if (response.ok) {
           mostrarToast('success', '✅ Registrado correctamente');
-          // Resetear valores
           nutella  = 0;
           arequipe = 0;
           document.getElementById('input-nutella').value  = 0;
@@ -800,6 +802,7 @@
       if (e.target === document.getElementById('modal-overlay')) cerrarModal();
     }
 
+    // ─── FINALIZAR DÍA (con reporte de cierre) ───────────
     async function finalizarDia() {
       const btnConf = document.getElementById('btn-modal-confirm');
       if (btnConf.disabled) return;
@@ -817,22 +820,81 @@
           body:    JSON.stringify(payload)
         });
 
-        cerrarModal();
-
         if (response.ok) {
+          const data    = await response.json();
+          const reporte = data[0]; // Primera fila que devuelve n8n
+
+          cerrarModal();
           mostrarToast('success', '✅ Día finalizado correctamente');
+
+          // Pintar el reporte en el contenedor
+          const contenedor = document.getElementById('resultado-cierre');
+          contenedor.style.display = 'block';
+          contenedor.innerHTML = `
+            <div class="card" style="border-left-color: #f97316;">
+              <h3 style="
+                color: #f97316;
+                font-size: 15px;
+                font-weight: 800;
+                margin: 0 0 16px;
+                text-align: center;
+                letter-spacing: 0.5px;
+              ">📊 RESUMEN DEL DÍA</h3>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px; align-items: center;">
+
+                <div style="color: #94a3b8; font-weight: 500;">Ingresos</div>
+                <div style="text-align: right; font-weight: 700; color: #f1f5f9;">
+                  $${Number(reporte.Ingresos || 0).toLocaleString('es-CO')}
+                </div>
+
+                <div style="color: #94a3b8; font-weight: 500;">CAPEX</div>
+                <div style="text-align: right; font-weight: 700; color: #f1f5f9;">
+                  $${Number(reporte.CAPEX || 0).toLocaleString('es-CO')}
+                </div>
+
+                <div style="grid-column: span 2; border-bottom: 1px solid #334155; margin: 4px 0;"></div>
+
+                <div style="color: #22c55e; font-weight: 700; font-size: 15px;">Utilidad neta</div>
+                <div style="text-align: right; color: #22c55e; font-weight: 800; font-size: 16px;">
+                  $${Number(reporte['Utilidad neta'] || 0).toLocaleString('es-CO')}
+                </div>
+
+              </div>
+
+              <div style="
+                margin-top: 14px;
+                padding-top: 12px;
+                border-top: 1px solid #1e3a2e;
+                display: flex;
+                justify-content: space-between;
+                font-size: 12px;
+                color: #64748b;
+              ">
+                <span>Ahorro: <strong style="color:#94a3b8;">$${Number(reporte.Ahorro || 0).toLocaleString('es-CO')}</strong></span>
+                <span>Salario: <strong style="color:#94a3b8;">$${Number(reporte.Salario || 0).toLocaleString('es-CO')}</strong></span>
+              </div>
+            </div>
+          `;
+
+          // Scroll suave al reporte
+          contenedor.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
         } else {
+          cerrarModal();
           mostrarToast('error', '❌ Error al finalizar el día');
         }
-      } catch (_) {
+      } catch (error) {
         cerrarModal();
         mostrarToast('error', '❌ Error de conexión');
+      } finally {
+        btnConf.disabled = false;
+        btnConf.textContent = 'Sí, finalizar';
       }
     }
 
     // ─── TOAST ───────────────────────────────────────────
     function mostrarToast(tipo, mensaje) {
-      // Eliminar toast anterior si existe
       const existing = document.getElementById('toast-current');
       if (existing) {
         clearTimeout(toastTimeout);
@@ -847,7 +909,6 @@
       toast.textContent = mensaje;
       document.body.appendChild(toast);
 
-      // Auto-cerrar en 2.5s con fade-out previo de 300ms
       toastTimeout = setTimeout(() => {
         toast.classList.add('hiding');
         setTimeout(() => {
